@@ -20,12 +20,18 @@ def find_similar_columns(df1, df2, threshold=80):
     return similar_columns
 
 
-def load_data(path):
+def load_data(path, dataset_name):
     """
-    Loads data from a CSV file into a Pandas DataFrame.
+    Loads data from a CSV file into a Pandas DataFrame and allows user to remove specified columns.
+    This function is specific to either the primary or secondary dataset as indicated by the dataset_name parameter.
     """
-    return pd.read_csv(path)
-
+    df = pd.read_csv(path)
+    print(f"Columns available in the {dataset_name} dataset: ", df.columns.tolist())
+    cols_to_remove = input(f"Enter the columns you wish to remove from the {dataset_name} dataset (separated by commas): ").split(',')
+    cols_to_remove = [col.strip() for col in cols_to_remove if col.strip() in df.columns]  # Validate input
+    if cols_to_remove:
+        df.drop(cols_to_remove, axis=1, inplace=True)
+    return df
 
 def combine_columns(df, columns):
     """
@@ -61,12 +67,13 @@ def find_closest_match_id_tf_idf(string_row, loaded_vectorizer, vectors, thresho
 
 def main():
     # Ask user to input the two datasets
+    print("For the primary dataset:")
     path_primary = input("Enter the path to the primary dataset (CSV format): ")
+    df_primary = load_data(path_primary, 'primary')
+    
+    print("\nFor the secondary dataset:")
     path_secondary = input("Enter the path to the secondary dataset (CSV format): ")
-
-    # Load the datasets
-    df_primary = load_data(path_primary)
-    df_secondary = load_data(path_secondary)
+    df_secondary = load_data(path_secondary, 'secondary')
 
     # Find and resize the datasets based on similar columns
     similar_columns = find_similar_columns(df_primary, df_secondary, threshold=80)
@@ -89,17 +96,39 @@ def main():
         loaded_vectorizer = pickle.load(file)
     secondary_vectors = vectorize_text(df_secondary_resized, vectorizer=loaded_vectorizer)[0]
 
-    # Loop through rows in the secondary dataset to find matches
-    for index, row in df_secondary_resized.iterrows():
-        combined_row_string = row['combined']
-        closest_match_id = find_closest_match_id_tf_idf(combined_row_string, loaded_vectorizer, vectors)
-        if closest_match_id is not None:
-            closest_match = df_primary_resized.iloc[closest_match_id]
-            print(f"Closest match for record {index} (Secondary): {combined_row_string}")
-            print(f"Is matched with (Primary): {closest_match['combined']}\n")
-        else:
-            print(f"Record {index} (Secondary): {combined_row_string} has no appropriate match\n")
+    # Prepare to store matched records
+    matched_records = []
+    all_columns = list(dict.fromkeys(df_primary.columns.tolist() + df_secondary.columns.tolist()))  # Unique columns
 
+    # Open a file to write the match results for text output
+    with open('match_results.txt', 'w') as results_file:
+        for index, row in df_secondary_resized.iterrows():
+            combined_row_string = row['combined']
+            closest_match_id = find_closest_match_id_tf_idf(combined_row_string, loaded_vectorizer, vectors)
+            if closest_match_id is not None:
+                closest_match = df_primary_resized.iloc[closest_match_id]
+
+                # Create a new record combining data from both matched rows
+                combined_record = {col: row[col] if col in df_secondary_resized.columns else np.nan for col in all_columns}
+                combined_record.update({col: closest_match[col] if col in df_primary_resized.columns else np.nan for col in all_columns})
+
+                matched_records.append(combined_record)
+
+                # Write to the text file
+                results_file.write(f"Closest match for record {index} (Secondary): {combined_row_string}\n")
+                results_file.write(f"Is matched with (Primary): {closest_match['combined']}\n\n")
+            else:
+                results_file.write(f"Record {index} (Secondary): {combined_row_string} has no appropriate match\n\n")
+
+    # Save matched records to a CSV file
+    if matched_records:
+        matched_df = pd.DataFrame(matched_records, columns=all_columns)
+        matched_df.to_csv('matched_records.csv', index=False)
+        print("Matched records have been saved to matched_records.csv")
+    else:
+        print("No matches found.")
+
+    print("The match results have been saved to match_results.txt")
 
 if __name__ == "__main__":
     main()
