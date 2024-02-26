@@ -98,31 +98,28 @@ def main():
 
     # Prepare to store matched records
     matched_records = []
-    all_columns = list(dict.fromkeys(df_primary.columns.tolist() + df_secondary.columns.tolist()))  # Unique columns
 
-    # Open a file to write the match results for text output
     with open('match_results.txt', 'w') as results_file:
-        for index, row in df_secondary_resized.iterrows():
-            combined_row_string = row['combined']
+        for index, secondary_row in df_secondary_resized.iterrows():
+            combined_row_string = secondary_row['combined']
             closest_match_id = find_closest_match_id_tf_idf(combined_row_string, loaded_vectorizer, vectors)
             if closest_match_id is not None:
-                closest_match = df_primary_resized.iloc[closest_match_id]
+                primary_row = df_primary.iloc[closest_match_id]  # Use the original primary dataframe for full data
 
-                # Create a new record combining data from both matched rows
-                combined_record = {col: row[col] if col in df_secondary_resized.columns else np.nan for col in all_columns}
-                combined_record.update({col: closest_match[col] if col in df_primary_resized.columns else np.nan for col in all_columns})
+                # Create a new concatenated record from matched rows
+                combined_record = {**{f'primary_{col}': primary_row[col] for col in df_primary.columns}, 
+                                   **{f'secondary_{col}': secondary_row[col] for col in df_secondary_resized.columns}}
 
                 matched_records.append(combined_record)
 
                 # Write to the text file
                 results_file.write(f"Closest match for record {index} (Secondary): {combined_row_string}\n")
-                results_file.write(f"Is matched with (Primary): {closest_match['combined']}\n\n")
+                results_file.write(f"Is matched with (Primary): {primary_row}\n\n")
             else:
                 results_file.write(f"Record {index} (Secondary): {combined_row_string} has no appropriate match\n\n")
 
-    # Save matched records to a CSV file
     if matched_records:
-        matched_df = pd.DataFrame(matched_records, columns=all_columns)
+        matched_df = pd.DataFrame(matched_records)
         matched_df.to_csv('matched_records.csv', index=False)
         print("Matched records have been saved to matched_records.csv")
     else:
