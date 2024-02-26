@@ -64,6 +64,10 @@ def find_closest_match_id_tf_idf(string_row, loaded_vectorizer, vectors, thresho
         return closest_match_index
     return None
 
+def merge_info(primary_info, secondary_info):
+    if pd.isna(primary_info) or primary_info == '':
+        return secondary_info  # Use secondary if primary is missing
+    return primary_info  # Prefer primary information
 
 def main():
     # Ask user to input the two datasets
@@ -99,22 +103,32 @@ def main():
     # Prepare to store matched records
     matched_records = []
 
+    # Automatically detect shared and unique fields
+    shared_fields = set(df_primary.columns).intersection(set(df_secondary.columns))
+    unique_primary_fields = set(df_primary.columns) - shared_fields
+    unique_secondary_fields = set(df_secondary.columns) - shared_fields
+
     with open('match_results.txt', 'w') as results_file:
-        for index, secondary_row in df_secondary_resized.iterrows():
-            combined_row_string = secondary_row['combined']
+        for index, secondary_row in df_secondary.iterrows():
+            combined_row_string = df_secondary_resized.iloc[index]['combined']  # Assuming 'combined' column exists
             closest_match_id = find_closest_match_id_tf_idf(combined_row_string, loaded_vectorizer, vectors)
             if closest_match_id is not None:
-                primary_row = df_primary.iloc[closest_match_id]  # Use the original primary dataframe for full data
+                primary_row = df_primary.iloc[closest_match_id]
 
-                # Create a new concatenated record from matched rows
-                combined_record = {**{f'primary_{col}': primary_row[col] for col in df_primary.columns}, 
-                                   **{f'secondary_{col}': secondary_row[col] for col in df_secondary_resized.columns}}
+                # Merge shared fields and retain unique fields from both datasets
+                combined_record = {}
+                for field in shared_fields:
+                    combined_record[field] = merge_info(primary_row[field], secondary_row[field])
+                for field in unique_primary_fields:
+                    combined_record[f'primary_{field}'] = primary_row[field]
+                for field in unique_secondary_fields:
+                    combined_record[f'secondary_{field}'] = secondary_row[field]
 
                 matched_records.append(combined_record)
 
                 # Write to the text file
                 results_file.write(f"Closest match for record {index} (Secondary): {combined_row_string}\n")
-                results_file.write(f"Is matched with (Primary): {primary_row}\n\n")
+                results_file.write(f"Is matched with (Primary): {primary_row.to_dict()}\n\n")
             else:
                 results_file.write(f"Record {index} (Secondary): {combined_row_string} has no appropriate match\n\n")
 
