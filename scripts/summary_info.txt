@@ -1,0 +1,5 @@
+Total number of matched records: 2447
+Number of unique fields from primary dataset: 2
+Number of unique fields from secondary dataset: 2
+Number of shared fields between datasets: 6
+Number of primary records matched more than once: 428

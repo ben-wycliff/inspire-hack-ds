@@ -102,6 +102,7 @@ def main():
 
     # Prepare to store matched records
     matched_records = []
+    primary_match_counts = {}
 
     # Automatically detect shared and unique fields
     shared_fields = set(df_primary.columns).intersection(set(df_secondary.columns))
@@ -114,6 +115,9 @@ def main():
             closest_match_id = find_closest_match_id_tf_idf(combined_row_string, loaded_vectorizer, vectors)
             if closest_match_id is not None:
                 primary_row = df_primary.iloc[closest_match_id]
+
+                # Increment the match count for this primary record
+                primary_match_counts[closest_match_id] = primary_match_counts.get(closest_match_id, 0) + 1
 
                 # Merge shared fields and retain unique fields from both datasets
                 combined_record = {}
@@ -131,6 +135,23 @@ def main():
                 results_file.write(f"Is matched with (Primary): {primary_row.to_dict()}\n\n")
             else:
                 results_file.write(f"Record {index} (Secondary): {combined_row_string} has no appropriate match\n\n")
+
+    multiple_matches_count = sum(1 for count in primary_match_counts.values() if count > 1)
+
+    summary_filename = 'summary_info.txt'
+    total_matches = len(matched_records)
+    unique_primary_count = len(unique_primary_fields)
+    unique_secondary_count = len(unique_secondary_fields)
+    shared_field_count = len(shared_fields)
+
+    with open(summary_filename, 'w') as summary_file:
+        summary_file.write(f"Total number of matched records: {total_matches}\n")
+        summary_file.write(f"Number of unique fields from primary dataset: {unique_primary_count}\n")
+        summary_file.write(f"Number of unique fields from secondary dataset: {unique_secondary_count}\n")
+        summary_file.write(f"Number of shared fields between datasets: {shared_field_count}\n")
+        summary_file.write(f"Number of primary records matched more than once: {multiple_matches_count}\n")
+    ...
+
 
     if matched_records:
         matched_df = pd.DataFrame(matched_records)
